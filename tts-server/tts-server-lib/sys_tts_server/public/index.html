@@ -66,10 +66,17 @@
 
             <label style="padding-left: 10px">
                 音调 (Pitch)
-                <input id="input_pitch" class="form-control" type="number" value="100" max="300" min="1"
+                <input id="input_pitch" class="form-control" type="number" value="0" max="100" min="-100"
                        style="max-width: 100px;"
-                       oninput="if(value>300){value=300}else if (value <1){value=1}">
+                       oninput="if(value>100){value=100}else if (value <-100){value=-100}">
             </label>
+        </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+        <div class="col">
+            <label for="input_token">Access token (if configured)</label>
+            <input id="input_token" class="form-control" type="password" autocomplete="current-password">
         </div>
     </div>
 
@@ -111,11 +118,11 @@
                     </button>
 
                 </div>
-                <div class="alert alert-primary" role="alert">
+                <div class="alert alert-primary" id="legadoImportTip" role="alert">
                     请在阅读的朗读引擎设置中选择网络导入此链接。
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-success" onclick="onBtnOneImportClick()">一键导入</button>
+                    <button type="button" class="btn btn-success" id="btn_one_import" onclick="onBtnOneImportClick()">一键导入</button>
                 </div>
             </div>
         </div>
@@ -130,31 +137,49 @@
     let switchElement = $("#switch_custom")[0]
     let collapseElement = $("#customVoiceCollapse")
     let sampleTextElement = $("#textarea_test")[0]
+    let tokenElement = $("#input_token")[0]
 
-    let storageEngine = localStorage.getItem("engine")
-    let storageLocale = localStorage.getItem("locale")
-    let storageVoice = localStorage.getItem("voice")
     let storageIsCustom = localStorage.getItem("isCustom")
     let storageSampleText = localStorage.getItem("sampleText")
+    let voicesRequestGeneration = 0
+    let enginesRequestGeneration = 0
+    let voicesLoading = false
+    let audioObjectUrl = null
+    let manualLegadoImportRequired = false
+    tokenElement.value = localStorage.getItem("accessToken") || ""
+
+    function authHeaders() {
+        let token = tokenElement.value.trim()
+        if (!token) return {}
+        return {"X-TTS-Token": token}
+    }
 
     function switchCustomChanged() {
+        localStorage.setItem("isCustom", switchElement.checked.toString())
         let visible = "hide"
         if (switchElement.checked) visible = "show"
         collapseElement.collapse(visible)
     }
 
     window.onload = function () {
-        if (storageIsCustom) {
-            switchElement.checked = storageIsCustom
+        if (storageIsCustom === "true") {
+            switchElement.checked = true
             switchCustomChanged()
         }
 
-        sampleTextElement.value = storageSampleText.trim().length === 0 ? "如果喜欢这个项目的话请点个Star吧。\nIf you like this project, please click Star." : storageSampleText
+        sampleTextElement.value = !storageSampleText || storageSampleText.trim().length === 0
+            ? "如果喜欢这个项目的话请点个Star吧。\nIf you like this project, please click Star."
+            : storageSampleText
+        updateTestAvailability()
     }
 
     window.onbeforeunload = function () {
         localStorage.setItem("sampleText", sampleTextElement.value)
+        if (audioObjectUrl) window.URL.revokeObjectURL(audioObjectUrl)
     }
+    sampleTextElement.addEventListener("input", () => localStorage.setItem("sampleText", sampleTextElement.value))
+    tokenElement.addEventListener("input", () => localStorage.setItem("accessToken", tokenElement.value))
+    tokenElement.addEventListener("change", fetchEngines)
 
     function engineChanged() {
         localStorage.setItem("engine", engineElement.value)
@@ -173,24 +198,30 @@
     let baseUrl = ''
     // let baseUrl = 'http://192.168.0.106:1233'
 
-    let engines = {}
-    fetch(baseUrl + '/api/engines', {mode: 'cors'})
-        .then(response => {
-            if (response.status === 200) {
-                return response.json()
-            } else {
+    let engines = []
+
+    function fetchEngines() {
+        const generation = ++enginesRequestGeneration
+        fetch(baseUrl + '/api/engines', {mode: 'cors', headers: authHeaders()})
+            .then(response => {
+                if (response.status === 200) return response.json()
                 return response.text().then(text => Promise.reject(text))
-            }
-        })
-        .then(data => {
-            engines = data
-            updateEngine()
-        })
-        .catch(reason => {
-            alert("加载引擎数据失败\n" +
-                "Failed to load engine data: \n" +
-                reason)
-        })
+            })
+            .then(data => {
+                if (generation !== enginesRequestGeneration) return
+                engines = Array.isArray(data) ? data : []
+                updateEngine()
+            })
+            .catch(reason => {
+                if (generation !== enginesRequestGeneration) return
+                engines = []
+                updateEngine()
+                alert("加载引擎数据失败\n" +
+                    "Failed to load engine data: \n" +
+                    reason)
+            })
+    }
+    fetchEngines()
 
     /* 复制导入链接 */
     function copyLegadoUrl() {
@@ -212,22 +243,64 @@
     }
 
     function onBtnOneImportClick() {
-        window.location.href = 'legado://import/httpTTS?src=' + $('#legadoUrl')[0].value
+        if (manualLegadoImportRequired) {
+            alert("This server uses a token. Copy the JSON and import it in Legado so its request header is retained.")
+            return
+        }
+        window.location.href = 'legado://import/httpTTS?src=' + encodeURIComponent($('#legadoUrl')[0].value)
+    }
+
+    function showLegadoModal(value, requiresManualImport) {
+        manualLegadoImportRequired = requiresManualImport
+        $('#legadoUrl')[0].value = value
+        $('#btn_one_import')[0].disabled = requiresManualImport
+        $('#legadoImportTip')[0].textContent = requiresManualImport
+            ? "This token-protected configuration must be copied and imported as JSON in Legado."
+            : "请在阅读的朗读引擎设置中选择网络导入此链接。"
+        new bootstrap.Modal($('#legadoUrlModal')[0]).show()
     }
 
     function onBtnImportClick() {
         let selectEngine = $('#select_engine')[0]
         let engine = selectEngine.value
         let name = getSelectedText(selectEngine)
-        let pitch  = $('#input_pitch')[0].value
+        let pitch = $('#input_pitch')[0].value
+        let voice = voiceElement.value
+        if (!engine || !voice) {
+            alert("No voice is available for the selected engine and locale.")
+            return
+        }
 
-        let url = `${window.location.protocol}//${window.location.host}/api/legado?api=${encodeURI(window.location.protocol)}//${window.location.host}/api/tts`
-            + `&name=${name}&engine=${engine}&pitch=${pitch}`
-        if (switchElement.checked) url += `&voice=${voiceElement.value}`
+        const ttsApi = new URL('/api/tts', window.location.origin)
+        const ttsParams = new URLSearchParams()
+        ttsParams.set('engine', engine)
+        ttsParams.set('voice', voice)
+        ttsParams.set('text', '{{java.encodeURIComponent(speakText)}}')
+        ttsParams.set('rate', '{{speakSpeed * 2}}')
+        ttsParams.set('pitch', pitch)
+        ttsApi.search = ttsParams.toString()
 
-        $('#legadoUrl')[0].value = url
-        let modal = new bootstrap.Modal($('#legadoUrlModal')[0])
-        modal.show()
+        const legadoApi = new URL('/api/legado', window.location.origin)
+        legadoApi.searchParams.set('api', ttsApi.toString())
+        legadoApi.searchParams.set('name', name)
+        legadoApi.searchParams.set('engine', engine)
+        legadoApi.searchParams.set('voice', voice)
+        legadoApi.searchParams.set('pitch', pitch)
+
+        if (authHeaders()["X-TTS-Token"]) {
+            fetch(baseUrl + legadoApi.pathname + legadoApi.search, {headers: authHeaders()})
+                .then(response => {
+                    if (response.status === 200) return response.json()
+                    return response.text().then(text => Promise.reject(text))
+                })
+                .then(config => {
+                    if (config.header) showLegadoModal(JSON.stringify(config, null, 2), true)
+                    else showLegadoModal(legadoApi.toString(), false)
+                })
+                .catch(reason => alert("Failed to create the Legado configuration: " + reason))
+        } else {
+            showLegadoModal(legadoApi.toString(), false)
+        }
     }
 
     function getSelectedText(obj) {
@@ -244,7 +317,11 @@
         let pitch = $('#input_pitch')[0].value
         let engine = $('#select_engine')[0].value
         let voice = $('#select_voice')[0].value
-        let isCustom = switchElement.checked
+
+        if (!engine || !voice || voicesLoading) {
+            alert("Wait for an available voice before testing.")
+            return
+        }
 
         let btn = $("#btn_test")[0]
         let load = $('#btn_test_load')[0]
@@ -252,12 +329,17 @@
         load.hidden = false
 
         let text = $('#textarea_test')[0].value
-        let params = `/api/tts?text=${text}&engine=${engine}&rate=${speechRate}&pitch=${pitch}`
-        if (isCustom) {
-            params += `&voice=${voice}`
-        }
-        fetch(baseUrl + params,
-            {method: 'GET'})
+        fetch(baseUrl + '/api/tts', {
+            method: 'POST',
+            headers: {...authHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                text: text,
+                engine: engine,
+                voice: voice,
+                rate: Number(speechRate),
+                pitch: Number(pitch),
+            })
+        })
             .then(response => {
                 if (response.status === 200) {
                     return response.arrayBuffer()
@@ -268,9 +350,16 @@
             .then(arrayBuffer => {
                 let blob = new Blob([arrayBuffer], {type: 'audio/x-wav'})
                 let audio = $('#audio')[0]
-                audio.src = window.URL.createObjectURL(blob)
+                if (audioObjectUrl) window.URL.revokeObjectURL(audioObjectUrl)
+                audioObjectUrl = window.URL.createObjectURL(blob)
+                audio.src = audioObjectUrl
+                audio.onended = () => {
+                    if (audioObjectUrl) window.URL.revokeObjectURL(audioObjectUrl)
+                    audioObjectUrl = null
+                }
+                audio.onerror = audio.onended
                 audio.load()
-                audio.play()
+                return audio.play()
             })
             .catch(reason => {
                 alert(reason)
@@ -278,12 +367,21 @@
             .finally(() => {
                 btn.disabled = false
                 load.hidden = true
+                updateTestAvailability()
             })
     }
 
     function updateEngine() {
         engineElement.innerHTML = ''
         engineElement.label = $('#label_engine').innerText
+        if (!Array.isArray(engines) || engines.length === 0) {
+            engineElement.add(new Option('No engines available', ''))
+            localeElement.innerHTML = ''
+            voiceElement.innerHTML = ''
+            updateTestAvailability()
+            return
+        }
+
         engines.forEach(engine => {
                 let name = engine['name']
                 let label = engine['label']
@@ -291,11 +389,16 @@
                 let option = document.createElement('option')
                 option.innerText = label + " (" + name + ")"
                 option.value = name
-                if (storageEngine === name) option.selected = true
+                if (localStorage.getItem("engine") === name) option.selected = true
 
                 engineElement.append(option)
             }
         )
+
+        if (!engines.some(engine => engine.name === engineElement.value)) {
+            engineElement.selectedIndex = 0
+        }
+        localStorage.setItem("engine", engineElement.value)
 
         fetchVoices()
     }
@@ -303,8 +406,19 @@
     let voices = {}
 
     function fetchVoices() {
-        let engine = getSelectedOption(engineElement).value
-        fetch(baseUrl + `/api/voices?engine=${engine}`, {mode: 'cors'})
+        const selectedEngine = getSelectedOption(engineElement)
+        const engine = selectedEngine?.value
+        const generation = ++voicesRequestGeneration
+        voicesLoading = true
+        updateTestAvailability()
+        voiceElement.innerHTML = ''
+        if (!engine) {
+            voices = []
+            voicesLoading = false
+            updateLocaleAndVoice()
+            return
+        }
+        fetch(baseUrl + `/api/voices?engine=${encodeURIComponent(engine)}`, {mode: 'cors', headers: authHeaders()})
             .then(response => {
                 if (response.status === 200) {
                     return response.json()
@@ -313,13 +427,23 @@
                 }
             })
             .then(data => {
-                voices = data
+                if (generation !== voicesRequestGeneration) return
+                voices = Array.isArray(data) ? data : []
                 updateLocaleAndVoice()
             })
             .catch(reason => {
+                if (generation !== voicesRequestGeneration) return
+                voices = []
+                updateLocaleAndVoice()
                 alert("加载语音数据失败\n" +
                     "Failed to load voice data: \n" +
                     reason)
+            })
+            .finally(() => {
+                if (generation === voicesRequestGeneration) {
+                    voicesLoading = false
+                    updateTestAvailability()
+                }
             })
     }
 
@@ -332,14 +456,24 @@
 
         const sortMap = new Map([...locales.entries()].sort((a, b) => a[1].localeCompare(b[1])));
         localeElement.innerHTML = ''
+        voiceElement.innerHTML = ''
+        if (sortMap.size === 0) {
+            localeElement.add(new Option('No locales available', ''))
+            voiceElement.add(new Option('No voices available', ''))
+            updateTestAvailability()
+            return
+        }
         sortMap.forEach((value, key) => {
             let option = document.createElement('option')
             option.innerText = value
             option.value = key
-            if (storageLocale === key) option.selected = true
+            if (localStorage.getItem("locale") === key) option.selected = true
 
             localeElement.append(option)
         })
+
+        if (![...sortMap.keys()].includes(localeElement.value)) localeElement.selectedIndex = 0
+        localStorage.setItem("locale", localeElement.value)
 
         updateVoice()
     }
@@ -347,7 +481,13 @@
     function updateVoice() {
         voiceElement.innerHTML = ''
         voiceElement.label = $('#label_voice').innerText
-        let currentLocale = getSelectedOption(localeElement).value
+        let currentLocale = getSelectedOption(localeElement)?.value
+        if (!currentLocale) {
+            voiceElement.add(new Option('No voices available', ''))
+            updateTestAvailability()
+            return
+        }
+        let availableVoices = []
         voices.forEach(voice => {
             let locale = voice['locale']
             if (currentLocale === locale) {
@@ -359,13 +499,25 @@
                 } else {
                     option.innerText = name
                 }
-                if (storageVoice === name) option.selected = true
-
                 option.value = name
                 voiceElement.append(option)
+                availableVoices.push(name)
             }
         })
+        if (availableVoices.length === 0) {
+            voiceElement.add(new Option('No voices available', ''))
+        } else {
+            const savedVoice = localStorage.getItem("voice")
+            voiceElement.value = availableVoices.includes(savedVoice) ? savedVoice : availableVoices[0]
+            localStorage.setItem("voice", voiceElement.value)
+        }
+        updateTestAvailability()
+    }
 
+    function updateTestAvailability() {
+        const testButton = $("#btn_test")[0]
+        if (!testButton) return
+        testButton.disabled = voicesLoading || !engineElement.value || !voiceElement.value
     }
 
 

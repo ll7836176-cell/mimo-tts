@@ -136,6 +136,13 @@ func (c *ConvServer) ttsAPIHandler(w http.ResponseWriter, r *http.Request) {
 		c.writeErrorStatus(w, http.StatusBadRequest, "request.invalid")
 		return
 	}
+	if strings.TrimSpace(request.voice) == "" {
+		request.voice, err = c.defaultVoiceForEngine(request.engine)
+		if err != nil {
+			c.writeErrorStatus(w, http.StatusBadRequest, "request.default_voice_unavailable")
+			return
+		}
+	}
 	if c.OnGetWavAudio == nil {
 		c.writeErrorStatus(w, http.StatusServiceUnavailable, "provider.unavailable")
 		return
@@ -241,6 +248,7 @@ func (c *ConvServer) legadoUrlApiHandler(w http.ResponseWriter, r *http.Request)
 		c.writeErrorStatus(w, http.StatusUnauthorized, "control.invalid_token")
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	c.setCors(w)
 
 	params := r.URL.Query()
@@ -250,7 +258,7 @@ func (c *ConvServer) legadoUrlApiHandler(w http.ResponseWriter, r *http.Request)
 	voice := params.Get("voice")
 	pitch := params.Get("pitch")
 
-	json, err := getLegadoJson(api, name, engine, voice, pitch)
+	json, err := getLegadoJson(api, name, engine, voice, pitch, c.AccessToken)
 	if err != nil {
 		c.writeErrorMsg(w, err)
 		return
@@ -377,12 +385,34 @@ func (c *ConvServer) parseTTSRequest(_ http.ResponseWriter, r *http.Request) (tt
 	if maxTextLength <= 0 {
 		maxTextLength = defaultTextMax
 	}
-	if strings.TrimSpace(request.engine) == "" || strings.TrimSpace(request.voice) == "" ||
+	if strings.TrimSpace(request.engine) == "" ||
 		strings.TrimSpace(request.text) == "" || len([]rune(request.text)) > maxTextLength ||
 		request.rate < 0 || request.rate > 200 || request.pitch < -100 || request.pitch > 100 {
 		return request, errors.New("invalid tts request")
 	}
 	return request, nil
+}
+
+func (c *ConvServer) defaultVoiceForEngine(engine string) (string, error) {
+	if c.OnGetVoices == nil {
+		return "", errors.New("voice provider unavailable")
+	}
+	data, err := c.OnGetVoices(engine)
+	if err != nil {
+		return "", err
+	}
+	var voices []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal([]byte(data), &voices); err != nil {
+		return "", err
+	}
+	for _, voice := range voices {
+		if name := strings.TrimSpace(voice.Name); name != "" {
+			return name, nil
+		}
+	}
+	return "", errors.New("no default voice")
 }
 
 func (c *ConvServer) acquireTTS(ctx context.Context) (func(), bool) {

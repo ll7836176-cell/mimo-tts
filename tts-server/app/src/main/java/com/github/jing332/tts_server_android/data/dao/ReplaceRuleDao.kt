@@ -60,6 +60,15 @@ interface ReplaceRuleDao {
     @Query("DELETE from ReplaceRule WHERE groupId = :groupId")
     fun deleteAllByGroup(groupId: Long)
 
+    @Transaction
+    fun deleteGroupAndRules(group: ReplaceRuleGroup) {
+        deleteAllByGroup(group.id)
+        deleteGroup(group)
+    }
+
+    @Query("UPDATE ReplaceRule SET isEnabled = :isEnabled WHERE groupId = :groupId")
+    fun setGroupEnabled(groupId: Long, isEnabled: Boolean)
+
     @Update
     fun update(vararg data: ReplaceRule)
 
@@ -75,6 +84,7 @@ interface ReplaceRuleDao {
         update(*list.toTypedArray())
     }
 
+    @Transaction
     fun insertRuleWithGroup(vararg args: GroupWithReplaceRule) {
         for (v in args) {
             insertGroup(v.group)

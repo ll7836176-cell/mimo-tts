@@ -15,9 +15,12 @@ import com.github.jing332.tts_server_android.app
 import com.github.jing332.tts_server_android.data.entities.systts.SystemTts
 import com.github.jing332.tts_server_android.help.audio.AudioDecoder
 import com.github.jing332.tts_server_android.model.speech.tts.LocalTTS
+import com.github.jing332.tts_server_android.model.speech.tts.EngineSynthesisOutcome
+import com.github.jing332.tts_server_android.model.speech.tts.LocalTtsPreviewPolicy
+import com.github.jing332.tts_server_android.model.speech.tts.LocalTtsPreviewResult
 import com.github.jing332.tts_server_android.ui.systts.edit.SpinnerData
 import com.github.jing332.tts_server_android.ui.view.widget.spinner.SpinnerItem
-import com.github.jing332.tts_server_android.utils.runOnUI
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -76,6 +79,7 @@ class LocalTtsViewModel : ViewModel() {
     private var engineLoadGeneration: Long = 0L
     private var engineLoadJob: Job? = null
     private val engineLoadMutex = Mutex()
+    private var testJob: Job? = null
     /** Engine that produced the currently published locale/voice catalog. */
     private var catalogEngine: String? = null
     private var hasPublishedCatalog = false
@@ -310,41 +314,47 @@ class LocalTtsViewModel : ViewModel() {
     }
 
     @Synchronized
-    fun doTest(
-        text: String,
-        onEngineInitSuccess: () -> Unit,
-
-        onGetAudioSuccess: suspend (audio: ByteArray, sampleRate: Int) -> Unit
-    ) {
-        viewModelScope.launch {
-            mTts.onLoad()
-
-            mTts.engineListener = null
-            if (mTts.isDirectPlayMode) {
-                mTts.engineListener = object : LocalTTS.EngineProgressListener {
-                    override fun onStart() {
-                        runOnUI { onEngineInitSuccess.invoke() }
-                    }
-
-                    override fun onDone() {
-                    }
-                }
-                withIO { mTts.startPlayWithSystemParams(text, sysRate = 20, sysPitch = 0) }
-            } else {
+    fun doTest(text: String, onResult: suspend (LocalTtsPreviewResult) -> Unit) {
+        testJob?.cancel()
+        testJob = viewModelScope.launch {
+            val result = try {
                 withIO {
-                    mTts.getAudioWithSystemParams(text, sysRate = 20, sysPitch = 0)?.let {
-                        val bytes = it.readBytes()
-                        val sampleRate = AudioDecoder.getSampleRateAndMime(bytes).first
-                        withMain { onGetAudioSuccess(bytes, sampleRate) }
-                        return@withIO
+                    when (val preview = LocalTtsPreviewPolicy.map(
+                        mTts.synthesizeWithSystemParams(text, sysRate = 20, sysPitch = 0)
+                    )) {
+                        is LocalTtsPreviewResult.AudioReady -> {
+                            val bytes = preview.audio.inputStream?.use { it.readBytes() }
+                                ?: preview.audio.bytes
+                            if (bytes == null || bytes.isEmpty()) {
+                                LocalTtsPreviewResult.Failed(
+                                    EngineSynthesisOutcome.FailureCategory.EMPTY_AUDIO.name
+                                )
+                            } else {
+                                val sampleRate = AudioDecoder.getSampleRateAndMime(bytes).first
+                                preview.copy(bytes = bytes, sampleRate = sampleRate)
+                            }
+                        }
+                        else -> preview
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                LocalTtsPreviewResult.Failed(e.message ?: e.javaClass.simpleName)
+            } finally {
+                mTts.engineListener = null
+            }
+            withMain {
+                testJob = null
+                onResult(result)
             }
         }
     }
 
     fun stopTestPlay() {
-        mTts.onStop()
+        testJob?.cancel()
+        testJob = null
+        if (::mTts.isInitialized) mTts.onStop()
     }
 
     fun canSave(): Boolean {
@@ -357,6 +367,7 @@ class LocalTtsViewModel : ViewModel() {
     override fun onCleared() {
         engineLoadGeneration += 1
         engineLoadJob?.cancel()
+        testJob?.cancel()
         super.onCleared()
         mTts.onDestroy()
         engineHelper.shutdown()

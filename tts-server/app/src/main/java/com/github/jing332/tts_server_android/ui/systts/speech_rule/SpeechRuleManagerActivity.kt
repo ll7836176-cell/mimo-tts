@@ -84,7 +84,7 @@ class SpeechRuleManagerActivity : BackActivity() {
             onCreate {
                 itemView.clickWithThrottle {
                     val model = getModel<SpeechRuleModel>()
-                        persist { appDb.speechRule.update(*appDb.speechRule.all.map {
+                    persist { appDb.speechRule.update(*appDb.speechRule.all.map {
                             it.isEnabled = model.data.id == it.id
                             it
                         }.toTypedArray()) }

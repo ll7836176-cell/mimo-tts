@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity(R.layout.main_activity),
         setSupportActionBar(binding.appBarMain.toolbar)
 
         val fragmentIndex = intent.getIntExtra(KEY_FRAGMENT_INDEX, AppConfig.fragmentIndex)
+        AppConfig.fragmentIndex = fragmentIndex
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
         val navView: NavigationView = binding.navView
@@ -211,6 +212,20 @@ class MainActivity : AppCompatActivity(R.layout.main_activity),
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        if (intent != null) setIntent(intent)
+        intent?.getIntExtra(KEY_FRAGMENT_INDEX, -1)
+            ?.takeIf { drawerMenus.getOrNull(it) != null }
+            ?.let { fragmentIndex ->
+                val destinationId = drawerMenus[fragmentIndex]
+                binding.navView.setCheckedItem(destinationId)
+                if (navController.currentDestination?.id != destinationId) {
+                    NavigationUI.onNavDestinationSelected(
+                        binding.navView.menu.findItem(destinationId),
+                        navController,
+                    )
+                }
+                AppConfig.fragmentIndex = fragmentIndex
+            }
         importConfigFromIntent(intent)
     }
 

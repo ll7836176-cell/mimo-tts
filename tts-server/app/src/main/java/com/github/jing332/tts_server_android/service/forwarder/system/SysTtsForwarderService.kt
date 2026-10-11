@@ -12,6 +12,7 @@ import com.github.jing332.tts_server_android.help.LocalTtsEngineHelper
 import com.github.jing332.tts_server_android.help.config.SysTtsForwarderConfig
 import com.github.jing332.tts_server_android.model.speech.tts.LocalTTS
 import com.github.jing332.tts_server_android.service.forwarder.AbsForwarderService
+import com.github.jing332.tts_server_android.ui.MainActivity
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import tts_server_lib.SysTtsForwarder
@@ -30,12 +31,13 @@ class SysTtsForwarderService(
         notificationChanTitle = R.string.forwarder_systts,
         notificationIcon = R.drawable.ic_baseline_compare_arrows_24,
         notificationTitle = R.string.forwarder_systts,
+        mainActivityFragmentIndex = MainActivity.INDEX_FORWARDER_SYS,
     ) {
     companion object {
         const val TAG = "SysTtsServerService"
-        const val ACTION_ON_CLOSED = "ACTION_ON_CLOSED"
+        const val ACTION_ON_CLOSED = "ACTION_ON_CLOSED_SYS"
         const val ACTION_ON_STARTING = "ACTION_ON_STARTING"
-        const val ACTION_ON_LOG = "ACTION_ON_LOG"
+        const val ACTION_ON_LOG = "ACTION_ON_LOG_SYS"
 
         val isRunning: Boolean
             get() = instance?.isRunning == true
@@ -48,6 +50,8 @@ class SysTtsForwarderService(
     private val mLocalTtsHelper by lazy { LocalTtsEngineHelper(this) }
 
     private val mCfg = SysTtsForwarderConfig
+
+    override fun listenAddress(): String = "127.0.0.1:$port"
 
     override fun onCreate() {
         super.onCreate()

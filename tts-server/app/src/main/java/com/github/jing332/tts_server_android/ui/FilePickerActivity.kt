@@ -22,8 +22,9 @@ import com.github.jing332.tts_server_android.ui.view.AppDialogs.displayErrorDial
 import com.github.jing332.tts_server_android.ui.view.ThemeExtensions.initAppTheme
 import com.github.jing332.tts_server_android.utils.FileUtils
 import com.github.jing332.tts_server_android.utils.FileUtils.mimeType
+import com.github.jing332.tts_server_android.utils.FileMimeFilter
 import com.github.jing332.tts_server_android.utils.getBinder
-import com.github.jing332.tts_server_android.utils.grantReadWritePermission
+import com.github.jing332.tts_server_android.utils.grantPersistableReadPermission
 import com.github.jing332.tts_server_android.utils.toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,7 @@ import me.rosuh.filepicker.bean.FileItemBeanImpl
 import me.rosuh.filepicker.config.AbstractFileFilter
 import me.rosuh.filepicker.config.FilePickerManager
 import java.io.File
+import java.io.IOException
 
 
 @Suppress("DEPRECATION")
@@ -58,20 +60,26 @@ class FilePickerActivity : AppCompatActivity() {
 
     private val docTreeSelector =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) {
-            it?.grantReadWritePermission(contentResolver)
+            it?.grantPersistableReadPermission(contentResolver)
             resultAndFinish(it)
         }
 
     private val docSelector =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) {
-            it?.grantReadWritePermission(contentResolver)
+            it?.grantPersistableReadPermission(contentResolver)
             resultAndFinish(it)
         }
 
     private fun resultAndFinish(uri: Uri?) {
+        if (uri == null) {
+            setResult(RESULT_CANCELED)
+            finish()
+            return
+        }
         setResult(RESULT_OK, Intent().apply {
             putExtra(KEY_REQUEST_DATA, requestData)
             data = uri
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         })
         finish()
     }
@@ -140,11 +148,13 @@ class FilePickerActivity : AppCompatActivity() {
                         finish()
                         return@registerForActivityResult
                     }
-                    uri.grantReadWritePermission(contentResolver)
                     lifecycleScope.launch(Dispatchers.IO) {
                         kotlin.runCatching {
-                            contentResolver.openOutputStream(uri)
-                                .use { it?.write(reqSaveFile.fileBytes) }
+                            val bytes = reqSaveFile.fileBytes
+                                ?: throw IOException("There is no file content to save")
+                            val output = contentResolver.openOutputStream(uri)
+                                ?: throw IOException("Unable to open the selected file")
+                            output.use { it.write(bytes) }
                             toast(R.string.save_success)
                         }.onFailure {
                             displayErrorDialog(it)
@@ -227,7 +237,7 @@ class FilePickerActivity : AppCompatActivity() {
                 docSelector.launch(reqSelectFile.fileMimes.toTypedArray())
             }.onFailure {
                 toast(R.string.sys_doc_picker_error)
-                useSystem = true
+                useSystem = false
                 return selectFile()
             }
         } else {
@@ -239,7 +249,10 @@ class FilePickerActivity : AppCompatActivity() {
                 .filter(object : AbstractFileFilter() {
                     override fun doFilter(listData: ArrayList<FileItemBeanImpl>): ArrayList<FileItemBeanImpl> {
                         return ArrayList(listData.filter { item ->
-                            item.isDir || reqSelectFile.fileMimes.contains(File(item.filePath).mimeType)
+                            item.isDir || FileMimeFilter.matches(
+                                reqSelectFile.fileMimes,
+                                File(item.filePath).mimeType,
+                            )
                         })
                     }
                 })
@@ -253,7 +266,7 @@ class FilePickerActivity : AppCompatActivity() {
                 docTreeSelector.launch(Uri.EMPTY)
             }.onFailure {
                 toast(R.string.sys_doc_picker_error)
-                useSystem = true
+                useSystem = false
                 return selectDir()
             }
         } else {
@@ -295,5 +308,5 @@ class FilePickerActivity : AppCompatActivity() {
     data class RequestSelectDir(val rootUri: Uri = Uri.EMPTY) : IRequestData
 
     @Parcelize
-    data class RequestSelectFile(val fileMimes: List<String> = listOf("")) : IRequestData
+    data class RequestSelectFile(val fileMimes: List<String> = listOf("*/*")) : IRequestData
 }

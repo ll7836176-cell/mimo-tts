@@ -19,6 +19,9 @@
     <string name="custom">自定义</string>
     <string name="app_down_again_to_exit">再按一次退出程序</string>
     <string name="cannot_empty">不可为空！</string>
+    <string name="systts_sample_rate_invalid">请输入 8000 到 192000 之间的采样率。</string>
+    <string name="systts_local_preview_failed">试听失败：%1$s</string>
+    <string name="systts_local_preview_direct_completed">直接播放试听已完成。</string>
 
     <string name="open_web">打开网页版</string>
     <string name="check_update">检查更新</string>
@@ -49,6 +52,7 @@
     <string name="label_result">结果：</string>
     <string name="label_audio_sample_rate">音频采样率(hz)：</string>
     <string name="label_port">端口:</string>
+    <string name="server_port_invalid">端口必须在 1 到 65535 之间。</string>
 
     <string name="systts_api_edge">微软Edge-大声朗读接口</string>
     <string name="systts_state_idle">TTS空闲中</string>
@@ -322,7 +326,7 @@
     <string name="remote_sync_service">远程同步</string>
     <string name="clear_cache">清空缓存</string>
     <string name="listen_port">监听端口</string>
-    <string name="script_sync_service_tip">代码同步服务，方便在PC端编辑、更新插件代码进行调试。\n⚠️设置在重启编辑器后生效</string>
+    <string name="script_sync_service_tip">代码同步服务，方便在PC端编辑、更新插件代码进行调试。\n保存后立即应用，端口不可用时会显示错误。</string>
     <string name="learn_more">了解详情</string>
     <string name="systts_bgm_description">音量:%1$s</string>
     <string name="total_n_folders">共 %1$s 个文件夹</string>

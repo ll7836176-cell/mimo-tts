@@ -14,6 +14,7 @@ import com.github.jing332.tts_server_android.databinding.SysttsBaseEditActivityB
 import com.github.jing332.tts_server_android.help.audio.AudioPlayer
 import com.github.jing332.tts_server_android.help.config.AppConfig
 import com.github.jing332.tts_server_android.model.speech.tts.ITextToSpeechEngine
+import com.github.jing332.tts_server_android.ui.systts.edit.TtsTestTextPolicy
 import com.github.jing332.tts_server_android.ui.base.BackActivity
 import com.github.jing332.tts_server_android.ui.view.ActivityTransitionHelper.initEnterSharedTransition
 import com.github.jing332.tts_server_android.ui.view.ThemeExtensions.initAppTheme
@@ -92,8 +93,12 @@ open class BaseTtsEditActivity<T : ITextToSpeechEngine>(val factory: () -> T) : 
             setText(AppConfig.testSampleText)
 
             testInputLayout?.setEndIconOnClickListener {
-                val textStr = text.toString()
-                if (textStr.isBlank()) setText(AppConfig.testSampleText)
+                val textStr = TtsTestTextPolicy.effectiveText(
+                    input = text.toString(),
+                    fallback = AppConfig.testSampleText,
+                )
+                setText(textStr)
+                AppConfig.testSampleText = textStr
                 onTest(textStr)
             }
         }
@@ -101,7 +106,9 @@ open class BaseTtsEditActivity<T : ITextToSpeechEngine>(val factory: () -> T) : 
 
     override fun onStop() {
         super.onStop()
-        AppConfig.testSampleText = testInputLayout?.editText?.text?.toString() ?: ""
+        testInputLayout?.editText?.text?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { AppConfig.testSampleText = it }
     }
 
     private var mData: SystemTts? = null

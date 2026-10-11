@@ -73,6 +73,12 @@ interface SystemTtsDao {
     @Query("UPDATE sysTts SET isEnabled = :isEnabled WHERE groupId = :groupId")
     fun setTtsEnabledInGroup(groupId: Long, isEnabled: Boolean)
 
+    @Transaction
+    fun setGroupEnabled(groupId: Long, isEnabled: Boolean, multipleGroupsEnabled: Boolean) {
+        if (isEnabled && !multipleGroupsEnabled) setAllTtsEnabled(false)
+        setTtsEnabledInGroup(groupId, isEnabled)
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertTts(vararg items: SystemTts)
 
@@ -101,6 +107,7 @@ interface SystemTtsDao {
     /**
      * 删除组以及TTS
      */
+    @Transaction
     fun deleteGroupAndTts(group: SystemTtsGroup) {
         deleteTtsByGroup(group.id)
         deleteGroup(group)

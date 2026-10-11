@@ -19,6 +19,7 @@ import kotlinx.serialization.encodeToString
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.charset.Charset
+import java.util.UUID
 import java.util.zip.ZipInputStream
 
 class BackupRestoreViewModel(application: Application) : AndroidViewModel(application) {
@@ -32,26 +33,27 @@ class BackupRestoreViewModel(application: Application) : AndroidViewModel(applic
         application.filesDir!!.parentFile!!
     }
 
-    // ... /cache/backupRestore/restore
-    private val restorePath by lazy {
-        backupRestorePath + File.separator + "restore"
-    }
-
-    // ... /cache/backupRestore/restore/shared_prefs
-    private val restorePrefsPath by lazy {
-        restorePath + File.separator + "shared_prefs"
-    }
-
-
     suspend fun restore(bytes: ByteArray): Boolean {
-        var isRestart = false
-        val outFileDir = File(restorePath)
-        ZipUtils.unzipFile(ZipInputStream(ByteArrayInputStream(bytes)), outFileDir)
-        if (outFileDir.exists()) {
-            // Parse every database payload before changing any durable state.
-            val operations = outFileDir.listFiles().orEmpty()
-                .filter { it.isFile }
-                .mapNotNull(::decodeRestoreOperation)
+        val backupRestoreDir = File(backupRestorePath)
+        if (!backupRestoreDir.exists() && !backupRestoreDir.mkdirs()) {
+            throw IllegalStateException("Unable to create restore directory")
+        }
+        val outFileDir = File(backupRestoreDir, "restore-${UUID.randomUUID()}")
+        if (!outFileDir.mkdirs()) {
+            throw IllegalStateException("Unable to create temporary restore directory")
+        }
+
+        try {
+            ZipUtils.unzipFile(ZipInputStream(ByteArrayInputStream(bytes)), outFileDir)
+
+            // Decode every database payload before changing any durable state.
+            val files = outFileDir.listFiles().orEmpty().filter { it.isFile }
+            val operations = files.mapNotNull(::decodeRestoreOperation)
+            val restorePrefsFile = File(outFileDir, "shared_prefs")
+            if (operations.isEmpty() && !restorePrefsFile.isDirectory) {
+                throw IllegalArgumentException("Backup contains no supported data")
+            }
+
             if (operations.isNotEmpty() && !RuntimeConfigWriter.publish {
                     operations.forEach { it() }
                 }
@@ -60,15 +62,14 @@ class BackupRestoreViewModel(application: Application) : AndroidViewModel(applic
             }
 
             // shared_prefs is copied only after the Room transaction commits.
-            val restorePrefsFile = File(restorePrefsPath)
-            if (restorePrefsFile.exists()) {
+            if (restorePrefsFile.isDirectory) {
                 FileUtils.copyFolder(restorePrefsFile, internalDataFile)
-                restorePrefsFile.deleteRecursively()
-                isRestart = true
             }
-        }
 
-        return isRestart
+            return restorePrefsFile.isDirectory
+        } finally {
+            outFileDir.deleteRecursively()
+        }
     }
 
     private fun decodeRestoreOperation(file: File): (() -> Unit)? {
@@ -82,7 +83,7 @@ class BackupRestoreViewModel(application: Application) : AndroidViewModel(applic
 
             file.name.endsWith("speechRules.json") -> {
                 val list: List<SpeechRule> = AppConst.jsonBuilder.decodeFromString(jsonStr)
-                val operation: () -> Unit = { appDb.speechRule.insertOrUpdate(*list.toTypedArray()) }
+                val operation: () -> Unit = { appDb.speechRule.restoreFromBackup(*list.toTypedArray()) }
                 operation
             }
 
@@ -95,7 +96,7 @@ class BackupRestoreViewModel(application: Application) : AndroidViewModel(applic
 
             file.name.endsWith("plugins.json") -> {
                 val list: List<Plugin> = AppConst.jsonBuilder.decodeFromString(jsonStr)
-                val operation: () -> Unit = { appDb.pluginDao.insertOrUpdate(*list.toTypedArray()) }
+                val operation: () -> Unit = { appDb.pluginDao.restoreFromBackup(*list.toTypedArray()) }
                 operation
             }
 

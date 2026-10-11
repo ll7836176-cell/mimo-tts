@@ -8,6 +8,8 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.webkit.*
 import androidx.fragment.app.Fragment
@@ -27,6 +29,11 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
 
     val webView: WebView get() = binding.webView
     private val mReceiver = MyReceiver()
+    private var loadRetryCount = 0
+    private val loadRetryHandler = Handler(Looper.getMainLooper())
+    private val retryLoad = Runnable {
+        if (isServiceRunning) loadCurrentServicePage(resetRetries = false)
+    }
 
     abstract val port: Int
     abstract val isServiceRunning: Boolean
@@ -42,7 +49,7 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
         }
 
         binding.swipeRefresh.setOnRefreshListener {
-            binding.webView.reload()
+            loadCurrentServicePage()
         }
         binding.webView.settings.javaScriptEnabled = true
         binding.webView.settings.domStorageEnabled = true
@@ -61,6 +68,7 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
                     .setPositiveButton(android.R.string.ok) { _, _ ->
                         result?.confirm()
                     }
+                    .setOnCancelListener { result?.confirm() }
                     .show()
                 return true
             }
@@ -82,6 +90,7 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
                     .setNegativeButton(R.string.cancel) { _, _ ->
                         result.cancel()
                     }
+                    .setOnCancelListener { result.cancel() }
                     .show()
                 return true
             }
@@ -89,7 +98,24 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
 
         binding.webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
+                loadRetryCount = 0
                 binding.swipeRefresh.isRefreshing = false
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame != true) return
+                if (isServiceRunning && loadRetryCount < 5) {
+                    loadRetryCount += 1
+                    loadRetryHandler.removeCallbacks(retryLoad)
+                    loadRetryHandler.postDelayed(retryLoad, 500)
+                } else {
+                    binding.swipeRefresh.isRefreshing = false
+                }
             }
 
             override fun shouldOverrideUrlLoading(
@@ -110,11 +136,18 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
             }
         }
 
-        webView.loadUrl("http://localhost:$port")
+        loadCurrentServicePage()
+    }
+
+    private fun loadCurrentServicePage(resetRetries: Boolean = true) {
+        if (resetRetries) loadRetryCount = 0
+        binding.swipeRefresh.isRefreshing = true
+        binding.webView.loadUrl("http://localhost:$port")
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        loadRetryHandler.removeCallbacks(retryLoad)
         AppConst.localBroadcast.unregisterReceiver(mReceiver)
         binding.webView.clearHistory()
         binding.webView.destroy()
@@ -148,7 +181,7 @@ abstract class AbsForwarderWebPageFragment(val startedAction: String) :
     inner class MyReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == startedAction) {
-                webView.reload()
+                loadCurrentServicePage()
             }
         }
 

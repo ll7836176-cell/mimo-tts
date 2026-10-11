@@ -39,7 +39,7 @@ class BgmTtsEditActivity : BaseTtsEditActivity<BgmTTS>({ BgmTTS() }) {
     
     private val mFilePicker =
         registerForActivityResult(AppActivityResultContracts.filePickerActivity()) {
-            if (it == null) return@registerForActivityResult
+            if (it?.first == null || it.second == null) return@registerForActivityResult
             kotlin.runCatching {
                 val path = this.getPath(it.second, it.first is FilePickerActivity.RequestSelectDir)
                 if (path.isNullOrBlank()) toast(R.string.path_is_empty)

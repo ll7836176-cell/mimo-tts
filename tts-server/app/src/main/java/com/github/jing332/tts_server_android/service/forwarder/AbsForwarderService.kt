@@ -35,7 +35,8 @@ abstract class AbsForwarderService(
     private val notificationChanId: String,
     @StringRes val notificationChanTitle: Int,
     @StringRes val notificationTitle: Int,
-    @DrawableRes val notificationIcon: Int
+    @DrawableRes val notificationIcon: Int,
+    private val mainActivityFragmentIndex: Int,
 ) : IntentService(name) {
     private val notificationActionCopyUrl = "ACTION_NOTIFICATION_COPY_URL_$name"
     private val notificationActionClose = "ACTION_NOTIFICATION_CLOSE_$name"
@@ -57,7 +58,7 @@ abstract class AbsForwarderService(
 
     private val mNotificationReceiver = NotificationActionReceiver()
 
-    fun listenAddress(): String {
+    open fun listenAddress(): String {
         return Tts_server_lib.getOutboundIP() + ":" + port
     }
 
@@ -136,13 +137,15 @@ abstract class AbsForwarderService(
         /*点击通知跳转*/
         val pendingIntent =
             PendingIntent.getActivity(
-                this, 0, Intent(
+                this, id, Intent(
                     this,
                     MainActivity::class.java
                 ).apply {
+                    action = "$packageName.OPEN_FORWARDER_$name"
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra(
                         MainActivity.KEY_FRAGMENT_INDEX,
-                        MainActivity.INDEX_FORWARDER_SYS
+                        mainActivityFragmentIndex
                     )
                 },
                 pendingIntentFlags

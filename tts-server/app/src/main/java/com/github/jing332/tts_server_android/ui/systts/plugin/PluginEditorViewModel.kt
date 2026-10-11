@@ -55,7 +55,7 @@ class PluginEditorViewModel(application: Application) : AndroidViewModel(applica
     fun updatePluginCode(code: String, isSave: Boolean = false) {
         pluginInfo.code = code
         pluginEngine.code = code
-        if (isSave) appDb.pluginDao.update()
+        if (isSave) appDb.pluginDao.update(pluginInfo)
     }
 
     fun clearPluginCache() {

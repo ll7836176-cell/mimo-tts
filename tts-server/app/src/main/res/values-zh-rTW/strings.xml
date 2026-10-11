@@ -409,4 +409,8 @@
     <string name="theme_beautiful_person_orange">美人焦橙</string>
     <string name="theme_magenta">紫红</string>
     <string name="app_help_document">帮助文档</string>
+    <string name="systts_sample_rate_invalid">請輸入 8000 到 192000 之間的取樣率。</string>
+    <string name="systts_local_preview_failed">試聽失敗：%1$s</string>
+    <string name="systts_local_preview_direct_completed">直接播放試聽已完成。</string>
+    <string name="server_port_invalid">連接埠必須在 1 到 65535 之間。</string>
 </resources>

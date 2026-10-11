@@ -23,10 +23,10 @@ import com.github.jing332.tts_server_android.constant.KeyConst
 import java.lang.reflect.ParameterizedType
 
 
-fun Uri.grantReadWritePermission(contentResolver: ContentResolver) {
+fun Uri.grantPersistableReadPermission(contentResolver: ContentResolver) {
     contentResolver.takePersistableUriPermission(
         this,
-        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        Intent.FLAG_GRANT_READ_URI_PERMISSION
     )
 }
 

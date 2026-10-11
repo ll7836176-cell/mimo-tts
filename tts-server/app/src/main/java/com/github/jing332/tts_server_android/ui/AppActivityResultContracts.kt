@@ -51,6 +51,7 @@ object AppActivityResultContracts {
                 resultCode: Int,
                 intent: Intent?
             ): Pair<FilePickerActivity.IRequestData?, Uri?> {
+                if (resultCode != Activity.RESULT_OK) return null to null
                 return intent?.getParcelableExtra<FilePickerActivity.IRequestData>(
                     FilePickerActivity.KEY_REQUEST_DATA
                 ) to intent?.data

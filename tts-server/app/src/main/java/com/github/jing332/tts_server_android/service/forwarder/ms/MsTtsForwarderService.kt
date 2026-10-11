@@ -5,6 +5,7 @@ import com.github.jing332.tts_server_android.help.config.AppConfig
 import com.github.jing332.tts_server_android.help.config.ServerConfig
 import com.github.jing332.tts_server_android.service.forwarder.AbsForwarderService
 import com.github.jing332.tts_server_android.ui.AppLog
+import com.github.jing332.tts_server_android.ui.MainActivity
 import tts_server_lib.LogCallback
 import tts_server_lib.Tts_server_lib
 
@@ -19,12 +20,13 @@ class MsTtsForwarderService(override val isWakeLockEnabled: Boolean = ServerConf
         notificationChanId = "server_status",
         notificationChanTitle = R.string.forwarder_ms,
         notificationTitle = R.string.forwarder_ms,
-        notificationIcon = R.drawable.ic_microsoft
+        notificationIcon = R.drawable.ic_microsoft,
+        mainActivityFragmentIndex = MainActivity.INDEX_FORWARDER_MS,
     ) {
     companion object {
         const val ACTION_ON_STARTED = "ACTION_ON_STARTED"
-        const val ACTION_ON_CLOSED = "ACTION_ON_CLOSED"
-        const val ACTION_ON_LOG = "ACTION_ON_LOG"
+        const val ACTION_ON_CLOSED = "ACTION_ON_CLOSED_MS"
+        const val ACTION_ON_LOG = "ACTION_ON_LOG_MS"
 
         val isRunning: Boolean
             get() = instance?.isRunning ?: false

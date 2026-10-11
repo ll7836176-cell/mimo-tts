@@ -17,6 +17,10 @@
     <string name="custom">Customize</string>
     <string name="app_down_again_to_exit">Press again to exit application</string>
     <string name="cannot_empty">Not nullable！</string>
+    <string name="server_port_invalid">Enter a port between 1 and 65535.</string>
+    <string name="systts_sample_rate_invalid">Enter a sample rate between 8000 and 192000.</string>
+    <string name="systts_local_preview_failed">Preview failed: %1$s</string>
+    <string name="systts_local_preview_direct_completed">Direct playback preview completed.</string>
 
     <string name="open_web">Open Web</string>
     <string name="check_update">Check for updates</string>
@@ -324,7 +328,7 @@
     <string name="remote_sync_service">Remote Sync Service</string>
     <string name="clear_cache">Clear Cache</string>
     <string name="listen_port">Listen Port</string>
-    <string name="script_sync_service_tip">The code synchronization service makes it easy to edit and update plugin code on the PC side for debugging purposes. \n⚠️ The settings will take effect after the editor is restarted.</string>
+    <string name="script_sync_service_tip">The code synchronization service lets you edit and update plugin code on a PC for debugging. Changes apply immediately; an unavailable port reports an error.</string>
     <string name="learn_more">Learn More</string>
     <string name="systts_bgm_description">Volume: %1$s</string>
     <string name="total_n_folders">Total %1$s Folders</string>

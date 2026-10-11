@@ -19,6 +19,7 @@ import com.github.jing332.tts_server_android.databinding.ForwarderHomeFragmentBi
 import com.github.jing332.tts_server_android.ui.AppLog
 import com.github.jing332.tts_server_android.ui.view.adapter.LogListItemAdapter
 import com.github.jing332.tts_server_android.utils.clickWithThrottle
+import com.github.jing332.tts_server_android.utils.NetworkPortPolicy
 import tts_server_lib.Tts_server_lib
 
 abstract class AbsForwarderHomePageFragment(
@@ -56,15 +57,29 @@ abstract class AbsForwarderHomePageFragment(
         binding.rvLog.layoutManager = layoutManager
 
         binding.switchOnOff.clickWithThrottle {
-            vm.switchStateLiveData.value = binding.switchOnOff.isChecked
+            val isChecked = binding.switchOnOff.isChecked
+            if (isChecked) {
+                val parsedPort = NetworkPortPolicy.parse(binding.tilPort.editText?.text?.toString())
+                if (parsedPort == null) {
+                    binding.tilPort.error = getString(R.string.server_port_invalid)
+                    binding.switchOnOff.isChecked = false
+                    return@clickWithThrottle
+                }
+                binding.tilPort.error = null
+                port = parsedPort
+            }
+            vm.switchStateLiveData.value = isChecked
         }
 
         binding.tilPort.editText?.apply {
             setText(port.toString())
             addTextChangedListener {
-                try {
-                    port = it.toString().toInt()
-                } catch (_: NumberFormatException) {
+                val parsedPort = NetworkPortPolicy.parse(it.toString())
+                binding.tilPort.error = if (parsedPort == null) {
+                    getString(R.string.server_port_invalid)
+                } else {
+                    port = parsedPort
+                    null
                 }
             }
         }
@@ -81,6 +96,7 @@ abstract class AbsForwarderHomePageFragment(
         } else {
             mLogAdapter.append((AppLog(LogLevel.INFO, tipInfo)))
         }
+        updateState()
     }
 
     override fun onDestroyView() {

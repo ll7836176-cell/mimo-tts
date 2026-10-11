@@ -118,7 +118,7 @@ class BackupRestoreFragment : PreferenceFragmentCompat() {
             withIO { vm.restore(bytes) }
         } catch (e: Exception) {
             requireContext().displayErrorDialog(e)
-            false
+            return@launch
         } finally {
             waitDialog.dismiss()
         }

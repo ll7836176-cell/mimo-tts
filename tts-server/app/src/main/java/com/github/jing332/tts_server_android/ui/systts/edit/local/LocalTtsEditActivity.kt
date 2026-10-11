@@ -6,6 +6,7 @@ import com.github.jing332.tts_server_android.R
 import com.github.jing332.tts_server_android.databinding.SysttsLocalEditActivityBinding
 import com.github.jing332.tts_server_android.model.speech.tts.BgmTTS
 import com.github.jing332.tts_server_android.model.speech.tts.LocalTTS
+import com.github.jing332.tts_server_android.model.speech.tts.LocalTtsPreviewResult
 import com.github.jing332.tts_server_android.ui.systts.edit.BaseTtsEditActivity
 import com.github.jing332.tts_server_android.ui.view.AppDialogs
 import com.github.jing332.tts_server_android.ui.view.AppDialogs.displayErrorDialog
@@ -21,6 +22,7 @@ class LocalTtsEditActivity : BaseTtsEditActivity<LocalTTS>({ LocalTTS() }) {
     private val waitDialog by lazy { WaitDialog(this) }
 
     override fun onSave() {
+        if (!binding.paramsEdit.validateSampleRate()) return
         if (!vm.canSave()) {
             displayErrorDialog(Throwable(getString(R.string.systts_local_config_invalid)))
             return
@@ -30,38 +32,48 @@ class LocalTtsEditActivity : BaseTtsEditActivity<LocalTTS>({ LocalTTS() }) {
     }
 
     override fun onDestroy() {
+        vm.stopTestPlay()
         super.onDestroy()
         if (waitDialog.isShowing) waitDialog.dismiss()
     }
 
     override fun onTest(text: String) {
+        if (!binding.paramsEdit.validateSampleRate()) return
         if (!vm.canSave()) {
             displayErrorDialog(Throwable(getString(R.string.systts_local_config_invalid)))
             return
         }
         waitDialog.show()
-        vm.doTest(text, { // 直接播放模式
+        vm.doTest(text) { result ->
             waitDialog.dismiss()
-            MaterialAlertDialogBuilder(this@LocalTtsEditActivity)
-                .setTitle(R.string.systts_test_success)
-                .setMessage(R.string.systts_state_synthesizing)
-                .setOnDismissListener {
-                    vm.stopTestPlay()
+            when (result) {
+                LocalTtsPreviewResult.DirectPlayCompleted -> {
+                    MaterialAlertDialogBuilder(this@LocalTtsEditActivity)
+                        .setTitle(R.string.systts_test_success)
+                        .setMessage(R.string.systts_local_preview_direct_completed)
+                        .show()
                 }
-                .show()
-        }, { audio, sampleRate ->
-            waitDialog.dismiss()
-            MaterialAlertDialogBuilder(this@LocalTtsEditActivity)
-                .setTitle(R.string.systts_test_success)
-                .setMessage(
-                    getString(R.string.systts_local_test_msg, audio.size / 1024, sampleRate)
+                is LocalTtsPreviewResult.AudioReady -> {
+                    val audio = result.bytes ?: return@doTest
+                    MaterialAlertDialogBuilder(this@LocalTtsEditActivity)
+                        .setTitle(R.string.systts_test_success)
+                        .setMessage(
+                            getString(
+                                R.string.systts_local_test_msg,
+                                audio.size / 1024,
+                                result.sampleRate,
+                            )
+                        )
+                        .setOnDismissListener { stopPlay() }
+                        .show()
+                    playAudio(audio)
+                }
+                is LocalTtsPreviewResult.Failed -> displayErrorDialog(
+                    Throwable(getString(R.string.systts_local_preview_failed, result.message))
                 )
-                .setOnDismissListener {
-                    stopPlay()
-                }
-                .show()
-            playAudio(audio)
-        })
+                LocalTtsPreviewResult.Stopped -> Unit
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

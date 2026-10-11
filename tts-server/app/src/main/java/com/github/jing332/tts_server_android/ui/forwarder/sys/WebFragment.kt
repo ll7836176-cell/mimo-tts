@@ -7,5 +7,5 @@ import com.github.jing332.tts_server_android.ui.forwarder.AbsForwarderWebPageFra
 internal class WebFragment() :
     AbsForwarderWebPageFragment(SysTtsForwarderService.ACTION_ON_STARTING) {
     override var isServiceRunning: Boolean = SysTtsForwarderService.isRunning
-    override val port: Int = SysTtsForwarderConfig.port
+    override val port: Int get() = SysTtsForwarderConfig.port
 }

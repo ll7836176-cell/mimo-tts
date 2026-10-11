@@ -7,6 +7,7 @@ import com.github.jing332.tts_server_android.data.appDb
 import com.github.jing332.tts_server_android.data.entities.replace.GroupWithReplaceRule
 import com.github.jing332.tts_server_android.data.entities.replace.ReplaceRule
 import com.github.jing332.tts_server_android.data.entities.replace.ReplaceRuleGroup
+import com.github.jing332.tts_server_android.service.systts.SystemTtsService
 import com.github.jing332.tts_server_android.ui.base.import1.BaseImportConfigBottomSheetFragment
 import com.github.jing332.tts_server_android.ui.base.import1.ConfigItemModel
 import com.github.jing332.tts_server_android.utils.StringUtils
@@ -53,13 +54,13 @@ class ImportConfigBottomSheetFragment :
                 }
         }
         displayListSelectDialog(allList) { list ->
-            list.map { it as Pair<ReplaceRuleGroup, ReplaceRule> }.forEach {
-                val group = it.first
-                val rule = it.second
-
-                appDb.replaceRuleDao.insert(rule)
-                appDb.replaceRuleDao.insertGroup(group)
-            }
+            val ruleGroups = list.map { it as Pair<ReplaceRuleGroup, ReplaceRule> }
+                .groupBy { it.first }
+                .map { (group, entries) ->
+                    GroupWithReplaceRule(group, entries.map { it.second })
+                }
+            appDb.replaceRuleDao.insertRuleWithGroup(*ruleGroups.toTypedArray())
+            SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
             longToast(getString(R.string.config_import_success_msg, list.size))
             dismiss()
         }

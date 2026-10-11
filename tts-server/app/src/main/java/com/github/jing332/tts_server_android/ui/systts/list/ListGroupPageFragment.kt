@@ -59,12 +59,10 @@ class ListGroupPageFragment : Fragment(R.layout.systts_list_group_fragment) {
                 }
 
                 override fun onCheckedChange(v: MaterialCheckBox, model: GroupModel) {
-                    if (!SysTtsConfig.isGroupMultipleEnabled)
-                        appDb.systemTtsDao.setAllTtsEnabled(false)
-
-                    appDb.systemTtsDao.setTtsEnabledInGroup(
+                    appDb.systemTtsDao.setGroupEnabled(
                         groupId = model.data.id,
-                        v.isChecked
+                        isEnabled = v.isChecked,
+                        multipleGroupsEnabled = SysTtsConfig.isGroupMultipleEnabled,
                     )
                     SystemTtsService.notifyUpdateConfig()
                 }
@@ -261,6 +259,7 @@ class ListGroupPageFragment : Fragment(R.layout.systts_list_group_fragment) {
     private fun removeGroup(data: SystemTtsGroup) {
         AppDialogs.displayDeleteDialog(requireContext(), data.name) {
             appDb.systemTtsDao.deleteGroupAndTts(data)
+            SystemTtsService.notifyUpdateConfig()
         }
     }
 }

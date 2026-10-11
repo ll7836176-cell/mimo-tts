@@ -31,6 +31,18 @@ interface PluginDao {
     @Query("SELECT * FROM plugin WHERE pluginId = :pluginId ")
     fun getByPluginId(pluginId: String): Plugin?
 
+    @Transaction
+    fun restoreFromBackup(vararg args: Plugin) {
+        args.forEach { plugin ->
+            val existing = getByPluginId(plugin.pluginId)
+            if (existing == null) {
+                insert(plugin.copy(id = 0))
+            } else {
+                update(plugin.copy(id = existing.id))
+            }
+        }
+    }
+
     fun insertOrUpdate(vararg args: Plugin) {
         for (v in args) {
             val old = getByPluginId(v.pluginId)

@@ -22,6 +22,7 @@ import com.github.jing332.tts_server_android.databinding.SysttsLocalParamsEditVi
 import com.github.jing332.tts_server_android.databinding.SysttsLocalParamsExtraEditViewBinding
 import com.github.jing332.tts_server_android.model.speech.tts.ITextToSpeechEngine
 import com.github.jing332.tts_server_android.model.speech.tts.LocalTTS
+import com.github.jing332.tts_server_android.model.speech.tts.AudioSampleRatePolicy
 import com.github.jing332.tts_server_android.model.speech.tts.LocalTtsParameter
 import com.github.jing332.tts_server_android.ui.systts.edit.BaseParamsEditView
 import com.github.jing332.tts_server_android.ui.view.AppDialogs
@@ -42,6 +43,18 @@ class LocalTtsParamsEditView @JvmOverloads constructor(
     private lateinit var mBrv: BindingAdapter
 
     override var tts: LocalTTS? = null
+
+    fun validateSampleRate(): Boolean {
+        val sampleRate = AudioSampleRatePolicy.parse(binding.spinnerSampleRate.text?.toString())
+        binding.tilSampleRate.error = if (sampleRate == null) {
+            context.getString(R.string.systts_sample_rate_invalid)
+        } else {
+            tts?.audioFormat?.sampleRate = sampleRate
+            null
+        }
+        if (sampleRate == null) binding.spinnerSampleRate.requestFocus()
+        return sampleRate != null
+    }
 
     override fun setData(tts: LocalTTS) {
         super.setData(tts)
@@ -104,7 +117,13 @@ class LocalTtsParamsEditView @JvmOverloads constructor(
         }
 
         binding.spinnerSampleRate.addTextChangedListener {
-            tts?.audioFormat?.sampleRate = it.toString().toInt()
+            val sampleRate = AudioSampleRatePolicy.parse(it.toString())
+            binding.tilSampleRate.error = if (sampleRate == null) {
+                context.getString(R.string.systts_sample_rate_invalid)
+            } else {
+                tts?.audioFormat?.sampleRate = sampleRate
+                null
+            }
         }
 
         // 采样率

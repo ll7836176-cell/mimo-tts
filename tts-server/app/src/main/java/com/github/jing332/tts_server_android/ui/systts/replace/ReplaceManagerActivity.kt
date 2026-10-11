@@ -83,11 +83,8 @@ class ReplaceManagerActivity : AppCompatActivity(R.layout.systts_replace_activit
                     }
 
                     override fun onCheckedChange(v: MaterialCheckBox, model: GroupModel) {
-                        model.itemSublist?.forEach {
-                            if (it is ItemModel) {
-                                appDb.replaceRuleDao.update(it.data.copy(isEnabled = v.isChecked))
-                            }
-                        }
+                        appDb.replaceRuleDao.setGroupEnabled(model.data.id, v.isChecked)
+                        SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
                     }
 
                     override fun onGroupMoveButtonClick(v: View, model: GroupModel) {
@@ -116,8 +113,8 @@ class ReplaceManagerActivity : AppCompatActivity(R.layout.systts_replace_activit
 
                                     R.id.menu_remove_group -> {
                                         AppDialogs.displayDeleteDialog(this@ReplaceManagerActivity, model.name) {
-                                            appDb.replaceRuleDao.deleteGroup(model.data)
-                                            appDb.replaceRuleDao.deleteAllByGroup(model.data.id)
+                                            appDb.replaceRuleDao.deleteGroupAndRules(model.data)
+                                            SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
                                         }
                                     }
                                 }
@@ -138,6 +135,7 @@ class ReplaceManagerActivity : AppCompatActivity(R.layout.systts_replace_activit
                     }
                     checkBox.setOnClickListener {
                         appDb.replaceRuleDao.update(getModel<ItemModel>().data)
+                        SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
                     }
                 }
             }
@@ -257,15 +255,18 @@ class ReplaceManagerActivity : AppCompatActivity(R.layout.systts_replace_activit
                     R.id.menu_delete -> {
                         AppDialogs.displayDeleteDialog(this@ReplaceManagerActivity, data.name) {
                             appDb.replaceRuleDao.delete(data)
+                            SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
                         }
                     }
 
                     R.id.menu_move_to_top -> {
                         appDb.replaceRuleDao.updateDataAndRefreshOrder(data.copy(order = 0))
+                        SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
                     }
 
                     R.id.menu_move_to_bottom -> {
                         appDb.replaceRuleDao.updateDataAndRefreshOrder(data.copy(order = appDb.replaceRuleDao.count))
+                        SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
                     }
                 }
                 true
@@ -332,7 +333,7 @@ class ReplaceManagerActivity : AppCompatActivity(R.layout.systts_replace_activit
         result.data?.apply {
             getParcelableExtra<ReplaceRule>(KeyConst.KEY_DATA)?.let {
                 appDb.replaceRuleDao.insert(it)
-                if (it.isEnabled) SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
+                SystemTtsService.notifyUpdateConfig(isOnlyReplacer = true)
             }
         }
     }

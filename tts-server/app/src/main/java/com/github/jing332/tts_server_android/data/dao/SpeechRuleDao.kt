@@ -30,6 +30,21 @@ interface SpeechRuleDao {
     @Query("SELECT * FROM speech_rules WHERE ruleId = :ruleId AND isEnabled = :isEnabled LIMIT 1")
     fun getByRuleId(ruleId: String, isEnabled: Boolean = true): SpeechRule?
 
+    @Query("SELECT * FROM speech_rules WHERE ruleId = :ruleId ORDER BY id ASC LIMIT 1")
+    fun getByRuleIdForRestore(ruleId: String): SpeechRule?
+
+    @Transaction
+    fun restoreFromBackup(vararg args: SpeechRule) {
+        args.forEach { rule ->
+            val existing = getByRuleIdForRestore(rule.ruleId)
+            if (existing == null) {
+                insert(rule.copy(id = 0))
+            } else {
+                update(rule.copy(id = existing.id))
+            }
+        }
+    }
+
 //    @Query("SELECT * FROM speech_rules WHERE ruleId = :ruleId")
 //    fun getByRuleId(ruleId: String): SpeechRule?
 

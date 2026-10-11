@@ -33,6 +33,7 @@ open class ConfigExportBottomSheetFragment(
 
     private lateinit var fileSaver: ActivityResultLauncher<FilePickerActivity.IRequestData>
     private val binding by lazy { SysttsConfigExportBottomSheetBinding.inflate(layoutInflater) }
+    private var hasExportConfig = false
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -47,14 +48,28 @@ open class ConfigExportBottomSheetFragment(
     open fun getFileName(): String = ""
 
     open fun onUpdateConfig() {
-        internalGetConfig().let {
-            if (it.isNotBlank())
-                binding.tvConfig.text = it
+        val config = try {
+            internalGetConfig()
+        } catch (e: Exception) {
+            hasExportConfig = false
+            updateExportActions()
+            requireContext().displayErrorDialog(e)
+            return
         }
+        setConfigString(config)
     }
 
     fun setConfigString(config: String) {
         binding.tvConfig.text = config
+        hasExportConfig = config.isNotBlank()
+        updateExportActions()
+    }
+
+    private fun updateExportActions() {
+        if (!isAdded) return
+        binding.btnCopy.isEnabled = hasExportConfig
+        binding.btnSave.isEnabled = hasExportConfig
+        binding.btnUpload.isEnabled = hasExportConfig
     }
 
     private fun setContainerView(view: View) {
@@ -84,11 +99,13 @@ open class ConfigExportBottomSheetFragment(
         onUpdateConfig()
 
         binding.btnCopy.clickWithThrottle {
+            if (!hasExportConfig) return@clickWithThrottle
             ClipboardUtils.copyText(binding.tvConfig.text.toString())
             toast(R.string.copied)
         }
 
         binding.btnSave.clickWithThrottle {
+            if (!hasExportConfig) return@clickWithThrottle
             fileSaver.launch(
                 FilePickerActivity.RequestSaveFile(
                     fileName = internalGetName(),
@@ -98,6 +115,7 @@ open class ConfigExportBottomSheetFragment(
         }
 
         binding.btnUpload.clickWithThrottle {
+            if (!hasExportConfig) return@clickWithThrottle
             upload(binding.tvConfig.text.toString())
         }
     }

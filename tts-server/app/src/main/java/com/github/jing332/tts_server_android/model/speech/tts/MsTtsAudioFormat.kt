@@ -2,7 +2,9 @@ package com.github.jing332.tts_server_android.model.speech.tts
 
 import androidx.annotation.IntDef
 import com.github.jing332.tts_server_android.constant.MsTtsApiType
+import kotlinx.parcelize.Parcelize
 
+@Parcelize
 data class MsTtsAudioFormat(
     val name: String,
     val value: String,

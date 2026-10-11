@@ -2,6 +2,7 @@ package com.github.jing332.tts_server_android.ui.systts.base
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.DialogInterface
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
@@ -34,10 +35,12 @@ import com.github.jing332.tts_server_android.ui.view.CodeEditorHelper
 import com.github.jing332.tts_server_android.ui.view.ThemeExtensions.initAppTheme
 import com.github.jing332.tts_server_android.ui.view.widget.AppMaterialDialogBuilder
 import com.github.jing332.tts_server_android.utils.longToast
+import com.github.jing332.tts_server_android.utils.NetworkPortPolicy
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.rosemoe.sora.widget.CodeEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 abstract class BaseScriptEditorActivity :
     AppBackActivity(R.layout.systts_base_script_editor_activity) {
@@ -110,25 +113,7 @@ abstract class BaseScriptEditorActivity :
         editor.nonPrintablePaintingFlags =
             CodeEditor.FLAG_DRAW_WHITESPACE_LEADING or CodeEditor.FLAG_DRAW_LINE_SEPARATOR or CodeEditor.FLAG_DRAW_WHITESPACE_IN_SELECTION
 
-        if (ScriptEditorConfig.isRemoteSyncEnabled) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                kotlin.runCatching {
-                    vm.startSyncServer(
-                        ScriptEditorConfig.remoteSyncPort,
-                        onPush = {
-                            baseBinding.editor.setText(it)
-                            updateCode(it)
-                            onScriptSyncPush()
-                        },
-                        onPull = { baseBinding.editor.text.toString() },
-                        onDebug = { onDebug() },
-                        onAction = { name, body -> onScriptSyncAction(name, body) }
-                    )
-                }.onFailure {
-                    displayErrorDialog(it)
-                }
-            }
-        }
+        if (ScriptEditorConfig.isRemoteSyncEnabled) restartRemoteSyncServer()
     }
 
 
@@ -203,20 +188,32 @@ abstract class BaseScriptEditorActivity :
                     tilPort.editText!!.setText(ScriptEditorConfig.remoteSyncPort.toString())
                 }
 
-                MaterialAlertDialogBuilder(this)
+                val dialog = MaterialAlertDialogBuilder(this)
                     .setView(view)
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        ScriptEditorConfig.isRemoteSyncEnabled = syncBinding.sw.isChecked
-                        ScriptEditorConfig.remoteSyncPort =
-                            syncBinding.tilPort.editText!!.text.toString().toInt()
-                    }
+                    .setPositiveButton(android.R.string.ok, null)
                     .setNegativeButton(R.string.cancel, null)
                     .setNeutralButton(R.string.learn_more) { _, _ ->
                         val url = "https://github.com/jing332/tts-server-psc"
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                         startActivity(intent)
                     }
-                    .show()
+                    .create()
+                dialog.setOnShowListener {
+                    dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                        val port = NetworkPortPolicy.parse(syncBinding.tilPort.editText?.text?.toString())
+                        if (port == null) {
+                            syncBinding.tilPort.error = getString(R.string.server_port_invalid)
+                            syncBinding.tilPort.requestFocus()
+                            return@setOnClickListener
+                        }
+                        syncBinding.tilPort.error = null
+                        ScriptEditorConfig.remoteSyncPort = port
+                        ScriptEditorConfig.isRemoteSyncEnabled = syncBinding.sw.isChecked
+                        dialog.dismiss()
+                        restartRemoteSyncServer()
+                    }
+                }
+                dialog.show()
 
             }
 
@@ -283,6 +280,35 @@ abstract class BaseScriptEditorActivity :
         }
 
         return super.onOptionsItemSelected(item)
+    }
+
+    private fun restartRemoteSyncServer() {
+        val isEnabled = ScriptEditorConfig.isRemoteSyncEnabled
+        val port = ScriptEditorConfig.remoteSyncPort
+        lifecycleScope.launch(Dispatchers.IO) {
+            vm.closeSyncServer()
+            if (!isEnabled) return@launch
+
+            kotlin.runCatching {
+                vm.startSyncServer(
+                    port,
+                    onPush = {
+                        baseBinding.editor.setText(it)
+                        updateCode(it)
+                        onScriptSyncPush()
+                    },
+                    onPull = { baseBinding.editor.text.toString() },
+                    onDebug = { onDebug() },
+                    onAction = { name, body -> onScriptSyncAction(name, body) }
+                )
+            }.onFailure {
+                ScriptEditorConfig.isRemoteSyncEnabled = false
+                withContext(Dispatchers.Main) {
+                    displayErrorDialog(it)
+                    invalidateOptionsMenu()
+                }
+            }
+        }
     }
 
     abstract fun getLogger(): Logger

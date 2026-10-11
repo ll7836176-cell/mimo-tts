@@ -16,6 +16,6 @@ internal class HomeFragment() : AbsForwarderHomePageFragment(
             SysTtsForwarderConfig.port = value
         }
 
-    override val isServiceRunning: Boolean = SysTtsForwarderService.isRunning
+    override val isServiceRunning: Boolean get() = SysTtsForwarderService.isRunning
     override val tipInfo: String get() = ""
 }

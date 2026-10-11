@@ -10,6 +10,7 @@ import com.github.jing332.tts_server_android.R
 import com.github.jing332.tts_server_android.databinding.SysttsHttpEditActivityBinding
 import com.github.jing332.tts_server_android.model.speech.tts.BgmTTS
 import com.github.jing332.tts_server_android.model.speech.tts.HttpTTS
+import com.github.jing332.tts_server_android.model.speech.tts.AudioSampleRatePolicy
 import com.github.jing332.tts_server_android.ui.systts.edit.BaseTtsEditActivity
 import com.github.jing332.tts_server_android.ui.view.widget.WaitDialog
 import com.github.jing332.tts_server_android.utils.FileUtils.readAllText
@@ -81,7 +82,7 @@ class HttpTtsEditActivity : BaseTtsEditActivity<HttpTTS>({ HttpTTS() }) {
     private val waitDialog by lazy { WaitDialog(this) }
 
     override fun onTest(text: String) {
-        updateValueToTts()
+        if (!updateValueToTts()) return
         waitDialog.show()
         vm.doTest(tts, text,
             { audio, sampleRate, mime, contentType ->
@@ -117,21 +118,29 @@ class HttpTtsEditActivity : BaseTtsEditActivity<HttpTTS>({ HttpTTS() }) {
             return
         }
 
-        updateValueToTts()
+        if (!updateValueToTts()) return
         SoftKeyboardUtils.hideSoftKeyboard(this)
 
         super.onSave()
     }
 
 
-    private fun updateValueToTts() {
+    private fun updateValueToTts(): Boolean {
+        val sampleRate = AudioSampleRatePolicy.parse(binding.tvSampleRate.text?.toString())
+        if (sampleRate == null) {
+            binding.tilSampleRate.error = getString(R.string.systts_sample_rate_invalid)
+            binding.tvSampleRate.requestFocus()
+            return false
+        }
+        binding.tilSampleRate.error = null
         systemTts.let {
             (it.tts as HttpTTS).apply {
                 url = binding.etUrl.text.toString()
                 header = binding.etHeaders.text.toString()
-                audioFormat.sampleRate = binding.tvSampleRate.text.toString().toInt()
+                audioFormat.sampleRate = sampleRate
                 audioFormat.isNeedDecode = binding.checkBoxNeedDecode.isChecked
             }
         }
+        return true
     }
 }

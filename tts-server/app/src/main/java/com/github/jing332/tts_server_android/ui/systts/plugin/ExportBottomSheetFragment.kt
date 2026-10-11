@@ -14,6 +14,7 @@ import com.github.jing332.tts_server_android.constant.AppConst
 import com.github.jing332.tts_server_android.data.appDb
 import com.github.jing332.tts_server_android.data.entities.plugin.Plugin
 import com.github.jing332.tts_server_android.ui.systts.ConfigExportBottomSheetFragment
+import com.github.jing332.tts_server_android.ui.view.AppDialogs.displayErrorDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -48,12 +49,13 @@ class ExportBottomSheetFragment : ConfigExportBottomSheetFragment() {
         }
         val plugins = arguments?.getParcelableArray(KEY_PLUGIN_LIST) as? Array<Plugin>
         lifecycleScope.launch(Dispatchers.Main) {
-            if (plugins == null) {
-                withIO { pluginList = appDb.pluginDao.allEnabled.toTypedArray() }
-            } else
-                pluginList = plugins
-
-            updateConfig()
+            kotlin.runCatching {
+                pluginList = plugins ?: withIO { appDb.pluginDao.allEnabled.toTypedArray() }
+                updateConfig()
+                includeVarsCheckBox.isEnabled = true
+            }.onFailure {
+                requireContext().displayErrorDialog(it)
+            }
         }
     }
 
@@ -76,6 +78,7 @@ class ExportBottomSheetFragment : ConfigExportBottomSheetFragment() {
         includeVarsCheckBox = CheckBox(requireContext())
 
         includeVarsCheckBox.setText(R.string.export_vars)
+        includeVarsCheckBox.isEnabled = false
         includeVarsCheckBox.setOnCheckedChangeListener { _, isChecked ->
             updateConfig(isChecked)
         }

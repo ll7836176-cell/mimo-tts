@@ -3,13 +3,13 @@
 # Build
 
 ```
-go install golang.org/x/mobile/cmd/gomobile@latest
+go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20220722155234-aaac322e2105
+go test ./...
 gomobile init
-go get golang.org/x/mobile/bind
 
 另外，还需设置ANDROID_NDK_HOME变量(如果在Android Studio里安装了NDK就直接设置ANDROID_HOME为SDK目录即可)
-然后构建：
-gomobile bind -v -target="android/arm,android/arm64" -androidapi=19
+然后构建所有Android ABI：
+gomobile bind -v -target="android" -androidapi=19
 
-最后将 tts_server_lib.aar 移动到 app/libs 目录下
+Go 1.27.2、gomobile v0.0.0-20220722155234-aaac322e2105 和 NDK 21.4.7075529 已用于当前 AAR。绑定完成后，将 tts_server_lib.aar 移动到 app/libs 目录下。
 ```
