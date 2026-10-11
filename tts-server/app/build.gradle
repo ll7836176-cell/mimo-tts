@@ -1,0 +1,279 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'kotlinx-serialization'
+    id 'kotlin-kapt'
+    id 'kotlin-parcelize'
+    id("com.google.devtools.ksp")
+}
+
+android {
+    compileSdk 33
+    namespace 'com.github.jing332.tts_server_android'
+    defaultConfig {
+        applicationId 'com.github.jing332.tts_server_android'
+        minSdk 21
+        targetSdk 33
+        versionCode 9
+        versionName "0.9"
+
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas".toString())
+            arg("room.incremental", "true")
+            arg("room.expandProjection", "true")
+        }
+
+        // 读取strings.xml所在文件夹 获得应用支持的语言
+        tasks.register('buildTranslationArray') {
+            def defaultCode = "zh-CN"
+            def foundLocales = new StringBuilder()
+            foundLocales.append("new String[]{")
+
+            fileTree("src/main/res").visit { details ->
+                if (details.file.path.endsWith("strings.xml")) {
+                    def path = details.file.parent.replaceAll('\\\\', "/")
+                    def languageCode = path.tokenize('/').last().replaceAll('values-', '').replaceAll('-r', '-')
+                    languageCode = (languageCode == "values") ? defaultCode : languageCode;
+                    foundLocales.append("\"").append(languageCode).append("\"").append(",")
+                }
+            }
+            foundLocales.append("}")
+            def foundLocalesString = foundLocales.toString().replaceAll(',}', '}')
+            buildConfigField "String[]", "TRANSLATION_ARRAY", foundLocalesString
+        }
+        preBuild.dependsOn buildTranslationArray
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            // Release signing is optional for configuration and required only
+            // when a release APK is actually requested. Debug must use the
+            // standard Android debug keystore.
+            Properties pro = new Properties()
+            File signingPropertiesFile = project.rootProject.file("local.properties")
+            if (signingPropertiesFile.exists()) {
+                signingPropertiesFile.withInputStream { pro.load(it) }
+            }
+            def signingKeys = ["KEY_PATH", "KEY_PASSWORD", "ALIAS_NAME", "ALIAS_PASSWORD"]
+            def signingReady = signingKeys.every { key ->
+                def value = pro.getProperty(key)
+                value != null && !value.trim().isEmpty()
+            } && file(pro.getProperty("KEY_PATH")).exists()
+            project.ext.releaseSigningReady = signingReady
+            if (signingReady) {
+                storeFile file(pro.getProperty("KEY_PATH"))
+                storePassword pro.getProperty("KEY_PASSWORD")
+                keyAlias pro.getProperty("ALIAS_NAME")
+                keyPassword pro.getProperty("ALIAS_PASSWORD")
+            }
+        }
+    }
+
+    def releaseSigningReady = project.ext.releaseSigningReady == true
+
+    buildTypes {
+        release {
+            versionNameSuffix "_${releaseTime()}"
+            if (releaseSigningReady) signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "_debug"
+            splits.abi.enable = false
+            splits.density.enable = false
+        }
+    }
+
+    // Keep debug/test configuration usable without private signing material,
+    // while making a missing release credential actionable at release task time.
+    tasks.configureEach { task ->
+        if (task.name.toLowerCase(Locale.ROOT).contains("release") &&
+                (task.name.startsWith("assemble") || task.name.startsWith("bundle") || task.name.startsWith("package"))) {
+            task.doFirst {
+                if (!project.ext.releaseSigningReady) {
+                    throw new GradleException(
+                            "Release signing is not configured. Add KEY_PATH, KEY_PASSWORD, " +
+                                    "ALIAS_NAME and ALIAS_PASSWORD to local.properties."
+                    )
+                }
+            }
+        }
+    }
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/INDEX.LIST', 'META-INF/*.md']
+        }
+    }
+
+
+    // 分别打包APK 原版 和 dev共存版
+    flavorDimensions += "version"
+    productFlavors {
+        app {
+            dimension = "version"
+        }
+        dev {
+            dimension = "version"
+            applicationIdSuffix ".dev"
+        }
+    }
+
+    splits {
+        abi {
+            enable true
+            reset()
+
+            include 'x86_64', 'x86', 'armeabi-v7a', 'arm64-v8a'
+            universalApk true
+        }
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    kotlin {
+        jvmToolchain(17)
+    }
+
+    // 修改apk文件名
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            //noinspection GrDeprecatedAPIUsage
+            def abiName = output.getFilter(com.android.build.OutputFile.ABI)
+            if (abiName == null)
+                output.outputFileName = "TTS-Server-v${variant.versionName}.apk"
+            else
+                output.outputFileName = "TTS-Server-v${variant.versionName}_${abiName}.apk"
+        }
+
+    }
+
+    buildFeatures {
+        viewBinding true
+        dataBinding true
+    }
+}
+
+def speechRuleFixtureSourceDir = file("$projectDir/src/test/resources/speech-rule-fixtures")
+def speechRuleFixtureOutputDir = file("$buildDir/generated/speechRuleTestFixtures")
+def speechRuleFixtureSha256 = "b1ab2859bbaafc3f522fb4cc6608b9c5d36409dc7a0602c5af823e0e95a3ff47"
+
+tasks.register('syncSpeechRuleTestFixtures', Sync) {
+    group = 'verification'
+    description = 'Sync and hash-check the Rhino speech-rule fixtures used by androidTest.'
+    from(speechRuleFixtureSourceDir) {
+        into('speech_rule_fixtures')
+    }
+    into(speechRuleFixtureOutputDir)
+
+    doFirst {
+        def fixture = new File(speechRuleFixtureSourceDir, 'mimo_profile.js')
+        if (!fixture.isFile()) {
+            throw new GradleException("Missing speech-rule fixture: ${fixture}")
+        }
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+            .digest(fixture.bytes)
+            .collect { String.format('%02x', it & 0xff) }
+            .join()
+        if (digest != speechRuleFixtureSha256) {
+            throw new GradleException(
+                "Speech-rule fixture hash mismatch: expected ${speechRuleFixtureSha256}, actual ${digest}"
+            )
+        }
+    }
+}
+
+project.extensions.getByName('android').sourceSets.getByName('androidTest').assets.srcDir(speechRuleFixtureOutputDir)
+tasks.matching { it.name.startsWith('merge') && it.name.endsWith('AndroidTestAssets') }.configureEach {
+    dependsOn(tasks.named('syncSpeechRuleTestFixtures'))
+}
+
+dependencies {
+    coreLibraryDesugaring('com.android.tools:desugar_jdk_libs:2.0.3')
+
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.navigation:navigation-ui-ktx:2.6.0'
+    implementation 'androidx.navigation:navigation-fragment-ktx:2.6.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    //noinspection GradleDependency
+    implementation 'com.google.android.material:material:1.9.0-beta01'
+
+    implementation 'androidx.preference:preference-ktx:1.2.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.0'
+
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.6.1'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1'
+
+    def markwon_version = '4.6.2'
+    implementation "io.noties.markwon:core:$markwon_version"
+    implementation "io.noties.markwon:image:$markwon_version"
+    implementation "io.noties.markwon:html:$markwon_version"
+    implementation "io.noties.markwon:linkify:$markwon_version"
+
+    implementation "com.caverock:androidsvg:1.4"
+
+    // RecyclerView
+    implementation 'com.github.liangjingkanji:BRV:1.4.3'
+    implementation "androidx.recyclerview:recyclerview:1.3.0"
+    implementation 'me.zhanghai.android.fastscroll:library:1.2.0'
+
+    implementation 'com.github.kirich1409:viewbindingpropertydelegate-noreflection:1.5.9'
+
+    // Code Editor
+    implementation 'io.github.Rosemoe.sora-editor:editor:0.21.1'
+    implementation 'io.github.Rosemoe.sora-editor:language-textmate:0.21.1'
+
+    // Room
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+    androidTestImplementation("androidx.room:room-testing:$room_version")
+
+
+    // IO & NET
+    implementation 'com.squareup.okio:okio:3.3.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+    // Net 3.5.8 is no longer resolvable from JitPack; 3.7.0 keeps the same
+    // com.drake.net API used by this project and is the maintained artifact.
+    implementation 'com.github.liangjingkanji:Net:3.7.0'
+
+    implementation 'me.rosuh:AndroidFilePicker:0.8.3'
+    implementation 'com.louiscad.splitties:splitties-systemservices:3.0.0'
+
+    implementation 'com.chibatching.kotpref:kotpref:2.13.2'
+    implementation 'com.chibatching.kotpref:enum-support:2.13.2'
+
+    implementation 'cn.hutool:hutool-crypto:5.8.17'
+
+    // Media
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.0'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.0'
+
+    // Logcat (Debug)
+    debugImplementation 'com.github.getActivity:Logcat:11.2'
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+
+static def releaseTime() {
+    return new Date().format("yyyyMMddHHmm", TimeZone.getTimeZone("GMT+08:00"))
+}

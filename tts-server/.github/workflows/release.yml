@@ -1,0 +1,107 @@
+name: Build Release
+
+on:
+  push:
+    branches:
+      - "master"
+    paths:
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+jobs:
+  golib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 1.19.1
+          cache-dependency-path: ${{ github.workspace }}/tts-server-lib
+
+      - name: Build tts-server-lib
+        run: |
+          cd tts-server-lib
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+          go get golang.org/x/mobile/bind
+          gomobile bind -ldflags "-s -w" -v -androidapi=19
+          cp -f *.aar $GITHUB_WORKSPACE/app/libs
+
+      - uses: actions/upload-artifact@v3.1.0
+        with:
+          name: tts-server-lib
+          path: tts-server-lib/*.aar
+
+  build:
+    needs: golib
+    strategy:
+      matrix:
+        product: [ {name: "App原版", value: app} ]
+        
+      fail-fast: false
+    runs-on: ubuntu-latest
+    env:
+      product: ${{ matrix.product.value }}
+      product_name: ${{matrix.product.value}}
+      outputs_dir: "${{ github.workspace }}/app/build/outputs"
+      ver_name: ""
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+            name: tts-server-lib
+            path: ${{ github.workspace }}/app/libs
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
+      - name: Init Signature
+        run: |
+          touch local.properties
+          echo ALIAS_NAME='${{ secrets.ALIAS_NAME }}' >> local.properties
+          echo ALIAS_PASSWORD='${{ secrets.ALIAS_PASSWORD }}' >> local.properties
+          echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}' >> local.properties
+          echo KEY_PATH='./key.jks' >> local.properties
+          # 从Secrets读取无换行符Base64解码, 然后保存到到app/key.jks
+          echo ${{ secrets.KEY_STORE }} | base64 --decode > $GITHUB_WORKSPACE/app/key.jks
+
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew assemble${{ env.product }}release --build-cache --parallel --daemon --warning-mode all
+
+      - name: Init environment variable
+        run: |
+          echo "ver_name=$(grep -m 1 'versionName' ${{ env.outputs_dir }}/apk/${{ env.product }}/release/output-metadata.json | cut -d\" -f4)" >> $GITHUB_ENV
+        
+      - name: Upload Mappings to Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: mappings_${{ env.product }}_${{ env.ver_name }}
+          path: ${{ env.outputs_dir }}/mapping/*/*.txt
+
+      - name: Upload APK To Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: "TTS-Server_${{ env.product }}_${{ env.ver_name }}"
+          path: ${{env.outputs_dir}}/apk/${{ env.product }}/release/*${{ env.ver_name }}.apk
+  
+        
+      - uses: softprops/action-gh-release@v0.1.15
+        with:
+          name: ${{ env.ver_name }}
+          tag_name: ${{ env.ver_name }}
+          body_path: ${{ github.workspace }}/CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: ${{env.outputs_dir}}/apk/${{ env.product }}/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}    
