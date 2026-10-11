@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="voice_samples" />
+        <exclude domain="file" path="cache" />
+        <exclude domain="sharedpref" path="mimo_secret_store.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="voice_samples" />
+        <exclude domain="file" path="cache" />
+        <exclude domain="sharedpref" path="mimo_secret_store.xml" />
+    </device-transfer>
+</data-extraction-rules>

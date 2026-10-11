@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="file" path="voice_samples" />
+    <exclude domain="file" path="cache" />
+    <exclude domain="sharedpref" path="mimo_secret_store.xml" />
+</full-backup-content>

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "model": "mimo-v2.5-tts",
+      "kind": "built-in",
+      "voice": "冰糖",
+      "format": "pcm16",
+      "stream": true,
+      "containsRoles": ["user", "assistant"]
+    },
+    {
+      "model": "mimo-v2.5-tts-voicedesign",
+      "kind": "design",
+      "requires": ["voiceDescription", "assistantText"]
+    },
+    {
+      "model": "mimo-v2.5-tts-voiceclone",
+      "kind": "clone",
+      "requires": ["privateMp3OrWavDataUrl"]
+    }
+  ]
+}

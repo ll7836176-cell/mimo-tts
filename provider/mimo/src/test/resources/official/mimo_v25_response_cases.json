@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    { "kind": "sse", "audioPath": "choices[0].delta.audio.data", "terminal": "[DONE]" },
+    { "kind": "batch", "audioPath": "choices[0].message.audio.data" },
+    { "kind": "error", "statusClass": "4xx" }
+  ]
+}

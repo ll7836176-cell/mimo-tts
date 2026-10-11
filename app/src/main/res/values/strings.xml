@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MiMo TTS</string>
+    <string name="dashboard_title">小米 MiMo 语音合成</string>
+    <string name="dashboard_subtitle">配置一次即可在系统 TTS 和阅读器中使用</string>
+    <string name="endpoint_label">接口地址</string>
+    <string name="model_label">模型 ID</string>
+    <string name="api_key_label">API Key</string>
+    <string name="save_button">保存设置</string>
+    <string name="saved_button">已保存</string>
+    <string name="system_tts_button">打开系统 TTS 设置</string>
+    <string name="security_note">API Key 优先使用 Android Keystore 加密；若设备不兼容，将使用随机软件密钥在本机应用私有空间加密保存。</string>
+</resources>

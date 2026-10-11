@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <permission
+        android:name="com.jingyue.mimotts.permission.TEST_CONTROL"
+        android:protectionLevel="signature" />
+
+    <application>
+        <provider
+            android:name="com.jingyue.mimotts.debug.MiMoTestControlProvider"
+            android:authorities="com.jingyue.mimotts.debug.testcontrol"
+            android:exported="true"
+            android:permission="com.jingyue.mimotts.permission.TEST_CONTROL" />
+    </application>
+</manifest>

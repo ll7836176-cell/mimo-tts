@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<voices provider="mimo" model="mimo-v2.5-tts">
+    <voice id="mimo_default" locale="zh-CN" />
+    <voice id="冰糖" locale="zh-CN" />
+    <voice id="茉莉" locale="zh-CN" />
+    <voice id="苏打" locale="zh-CN" />
+    <voice id="白桦" locale="zh-CN" />
+    <voice id="Mia" locale="en-US" />
+    <voice id="Chloe" locale="en-US" />
+    <voice id="Milo" locale="en-US" />
+    <voice id="Dean" locale="en-US" />
+</voices>
